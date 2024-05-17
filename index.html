@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informasi Real-Time tentang Aktivitas Seismik Global - WebGIS Sederhana dengan Leaflet</title>
+    <!-- Sertakan Leaflet CSS --> 
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <!-- Sertakan Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
+    <script src="Wilayah_Cibodas.js"></script>
+    <style>
+         /* Gaya container peta */
+        #container {
+            position: relative;
+        }
+        #map {
+            height: 1800px;
+            width: 100%;
+        }
+        .title {
+            position: absolute;
+            top: 5%; /* Posisi vertikal di tengah */
+            left: 50%; /* Posisi horizontal di tengah */
+            transform: translate(-50%, -50%); /* Menggeser titik tengah elemen ke posisi yang diinginkan */
+            font-size: 40px;
+            font-weight: bold;
+            background-color: rgba(255, 255, 255, 0.7); /* Warna latar belakang dengan opasitas */
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 1000; /* Pastikan judul berada di depan peta */
+        }
+
+        .custom-icon {
+            background-color: green;
+            border-radius: 50%;
+            width: 100px;
+            height: 100px;
+        }
+        .custom-icon.red {
+            background-color: red;
+            border-radius: 50%;
+        }
+        .custom-icon.yellow {
+            background-color: yellow;
+            border-radius: 50%;
+        }
+        .custom-icon.orange {
+            background-color: orange;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <!-- Container -->
+    <div id="container">
+        <!-- Judul -->
+        <div class="title">Informasi Real-Time tentang Aktivitas Seismik Global</div>
+
+        <!-- Buat elemen div dengan id "map" -->
+        <div id="map"></div>
+    </div>
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.20.0/firebase-app.js";
+
+        // Your web app's Firebase configuration here (Do not use the existing configuration)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDTEaWCG4LH2z5c41d40YF9o80X1flxUDo",
+            authDomain: "agrisoil-dev.firebaseapp.com",
+            databaseURL: "https://agrisoil-dev-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "agrisoil-dev",
+            storageBucket: "agrisoil-dev.appspot.com",
+            messagingSenderId: "228968477248",
+            appId: "1:228968477248:web:3c12af224bc5901034e5a5"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+
+        // getting reference to the database
+        var database = firebase.database();
+        // Inisialisasi peta menggunakan Google Maps
+        var peta = L.map('map').setView([-6.970528, 107.628125], 5);
+
+        // Tambahkan layer tile peta Google Maps Satelit
+        L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            attribution: '© Google Maps'
+        }).addTo(peta);
+
+        L.geoJSON(myGeoJSON, {
+            style: function(feature) {
+                return {
+                    color: "red",       // Warna batas merah
+                    weight: 5,          // Lebar batas 5 piksel
+                    fillOpacity: 0      // Opasitas pengisian 0 (transparan)
+                };
+            }
+        }).addTo(peta);
+
+
+   // Ambil data marker dari Firebase dan tambahkan ke peta
+var alat4Ref = firebase.database().ref("Alat1  ");
+
+// Gunakan metode "on" untuk berlangganan langsung ke perubahan data
+alat4Ref.on("value", function(snapshot) {
+    // Hapus semua marker dan lingkaran sebelum menambahkan yang baru
+    peta.eachLayer(function(layer) {
+        if (layer instanceof L.Marker || layer instanceof L.Circle) {
+            peta.removeLayer(layer);
+        }
+    });
+
+    snapshot.forEach(function(childSnapshot) {
+        var data = childSnapshot.val();
+        var nilaiN = data.n;
+        var iconColor;
+        var circleColor;
+        var radiusValues = [];
+
+        if (nilaiN < 5) {
+            iconColor = 'green';
+            radiusValues = [200000];
+        } else if (nilaiN >= 5 && nilaiN < 7) {
+            iconColor = 'yellow';
+            radiusValues = [200000, 500000];
+        } else if (nilaiN >= 7 && nilaiN < 8) {
+            iconColor = 'orange';
+            radiusValues = [200000, 500000, 1000000];
+        } else if (nilaiN >= 8) {
+            iconColor = 'red';
+            radiusValues = [200000, 500000, 1000000, 1200000];
+        }
+
+        // Tambahkan marker ke peta
+        var marker = L.marker([data.LAT, data.LONG], {
+            icon: L.divIcon({
+                className: 'custom-icon ' + iconColor,
+                iconSize: [30, 30]
+            })
+        }).bindPopup(`
+                <b>Data</b><br>
+                N: ${data.n}<br>
+                P: ${data.p}<br>
+                K: ${data.k}<br>
+                pH: ${data.ph}<br>
+                Moisture: ${data.moisture}`)
+            .addTo(peta);
+
+        // Tambahkan lingkaran besar dengan radius awal
+        var circle = L.circle([data.LAT, data.LONG], {
+            radius: 500000, // Radius lingkaran awal dalam meter
+            color: circleColor, // Warna garis
+            fillOpacity: 0.3, // Opasitas pengisian
+        }).addTo(peta);
+
+        // Indeks saat ini dalam array nilai radius
+        var currentIndex = 0;
+
+        // Fungsi untuk menganimasikan lingkaran
+        function animateCircle() {
+            // Mengambil nilai radius saat ini dari array
+            var radius = radiusValues[currentIndex];
+            circle.setRadius(radius); // Mengatur radius lingkaran
+
+            // Memperbarui warna lingkaran berdasarkan nilaiN
+            if (nilaiN < 5) {
+                circle.setStyle({ color: 'green' }); // Mengubah warna menjadi hijau jika nilaiN < 5
+            } else if (nilaiN >= 5 && nilaiN < 7) {
+                circle.setStyle({ color: 'yellow' }); // Kuning jika nilaiN di antara 5 dan 7
+            } else if (nilaiN >= 7 && nilaiN < 8) {
+                circle.setStyle({ color: 'orange' }); // Orange jika nilaiN di antara 7 dan 8
+            } else if (nilaiN >= 8) {
+                circle.setStyle({ color: 'red' }); // Merah jika nilaiN lebih dari atau sama dengan 8
+            }
+
+            // Memperbarui indeks untuk mendapatkan nilai radius berikutnya
+            currentIndex = (currentIndex + 1) % radiusValues.length;
+
+            // Melanjutkan animasi ke lingkaran berikutnya setelah jeda waktu
+            setTimeout(animateCircle, 1000); // Interval waktu 1000 milidetik (1 detik)
+        }
+
+        // Memulai animasi
+        animateCircle();
+    });
+});
+
+
+
+
+
+
+    </script>
+</body>
+</html>
